@@ -1,14 +1,17 @@
-function RegisterCommands()
-    RegisterCommand("animals", "cat", "GetCatPicture")
-    RegisterCommand("animals", "dog", "GetDogPicture")
+function RegisterCommands(filename)
+    register(filename, "dog", "GetDogPicture")
+    register(filename, "cat", "GetCatPicture")
+end
+
+function register(filename,command,function_name)
+    RegisterCommand(filename, command, function_name)
 end
 
 function GetCatPicture()
-    a = RestGet("https://random.dog/woof.json")
-    print(a.String(a))
-    return a.String(a)
+    -- log("getting cat pics")
+    return rGet("https://random.dog/woof.json")
 end
 
 function GetDogPicture()
-    return "dog"
+    return rGet("https://dog.ceo/api/breeds/image/random")
 end
