@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -52,16 +53,26 @@ func RegisterCommand(plugin string, command string, function string) {
 }
 
 func HandleCommand(username string, msg string) {
+	msg = strings.TrimSpace(msg)
 	command := strings.Split(msg, " ")[0]
-	plugParams := regCommands[command]
-	// ret, err := pm.Call(plugParams.Plugin + "." + plugParams.Function)
-	ret := ""
-	err := pm.CallUnmarshal(&ret, plugParams.Plugin+"."+plugParams.Function, username, strings.Split(msg, " "))
-	if err != nil {
-		log.Errorf("error while handling command %s: %v", command, err)
-		return
+
+	switch command {
+	case "":
+		log.Debug("Invalid Command")
+	case "reload":
+		loadPlugins(pm)
+		log.Debug("reloaded plugins")
+	default:
+		plugParams := regCommands[command]
+		// ret, err := pm.Call(plugParams.Plugin + "." + plugParams.Function)
+		ret := ""
+		err := pm.CallUnmarshal(&ret, plugParams.Plugin+"."+plugParams.Function, username, strings.Split(msg, " "))
+		if err != nil {
+			log.Errorf("error while handling command %s: %v", command, err)
+			return
+		}
+		log.Debugf(">%s: %s", command, ret)
 	}
-	log.Debugf(">%s: %s", command, ret)
 }
 
 func AddCommands(pm plugin.PluginManager) {
@@ -86,11 +97,7 @@ func AddCommands(pm plugin.PluginManager) {
 	})
 }
 
-func main() {
-	log.SetLevel(log.DebugLevel)
-
-	pm = plugin.NewPluginManager()
-	defer pm.Close()
+func loadPlugins(pm plugin.PluginManager) {
 
 	// load all plugin files
 	for _, p := range getPluginFiles() {
@@ -102,13 +109,22 @@ func main() {
 		}
 	}
 
-	// Add golang functions as commands to be called from lua
-	AddCommands(pm)
-
+	log.Debug("Registering plugin commands")
 	// call RegisterCommands for each plugin
 	pm.Each(func(p plugin.Plugin) {
 		pm.Call(p.Name+".RegisterCommands", p.Name)
 	})
+
+}
+
+func main() {
+	log.SetLevel(log.DebugLevel)
+	pm = plugin.NewPluginManager()
+	defer pm.Close()
+
+	// Add golang functions as commands to be called from lua
+	AddCommands(pm)
+	HandleCommand("system", "reload")
 
 	// test code
 	test()
@@ -116,8 +132,12 @@ func main() {
 
 func test() {
 	for {
-		var input string
-		fmt.Scanln(&input)
+		in := bufio.NewReader(os.Stdin)
+		input, err := in.ReadString('\n')
+		if err != nil {
+			panic(err)
+		}
+		log.Debugf("User Input: %s", input)
 		HandleCommand("mridulganga", input)
 	}
 
