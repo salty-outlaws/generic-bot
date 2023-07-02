@@ -9,7 +9,7 @@ end
 
 function GetCatPicture()
     -- log("getting cat pics")
-    return rGet("https://random.dog/woof.json")
+    return rGet("https://cataas.com/cat?json=true")
 end
 
 function GetDogPicture()

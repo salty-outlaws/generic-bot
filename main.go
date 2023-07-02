@@ -1,12 +1,15 @@
 package main
 
 import (
-	"bufio"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/salty-outlaws/generic-bot/db"
 	"github.com/salty-outlaws/generic-bot/plugin"
 	"github.com/salty-outlaws/generic-bot/rest"
@@ -52,7 +55,7 @@ func RegisterCommand(plugin string, command string, function string) {
 	}
 }
 
-func HandleCommand(username string, msg string) {
+func HandleCommand(username string, msg string) (string, error) {
 	msg = strings.TrimSpace(msg)
 	command := strings.Split(msg, " ")[0]
 
@@ -69,10 +72,12 @@ func HandleCommand(username string, msg string) {
 		err := pm.CallUnmarshal(&ret, plugParams.Plugin+"."+plugParams.Function, username, strings.Split(msg, " "))
 		if err != nil {
 			log.Errorf("error while handling command %s: %v", command, err)
-			return
+			return "", err
 		}
 		log.Debugf(">%s: %s", command, ret)
+		return ret, nil
 	}
+	return "", nil
 }
 
 func AddCommands(pm plugin.PluginManager) {
@@ -126,27 +131,35 @@ func main() {
 	AddCommands(pm)
 	HandleCommand("system", "reload")
 
-	// test code
-	test()
+	webserver()
 }
 
-func test() {
-	for {
-		in := bufio.NewReader(os.Stdin)
-		input, err := in.ReadString('\n')
-		if err != nil {
-			panic(err)
-		}
-		log.Debugf("User Input: %s", input)
-		HandleCommand("mridulganga", input)
-	}
+func webserver() {
+	r := gin.Default()
+	r.POST("/api/message", func(c *gin.Context) {
 
-	// HandleCommand("mridulganga", "cat pics")
-	// HandleCommand("mridulganga", "dog pics")
-	// HandleCommand("mridulganga", "balance")
-	// // HandleCommand("mridulganga", "gamble all")
-	// // HandleCommand("mridulganga", "gamble all")
-	// // HandleCommand("mridulganga", "gamble all")
-	// // HandleCommand("mridulganga", "gamble all")
-	// HandleCommand("mridulganga", "beg")
+		jsonData, err := ioutil.ReadAll(c.Request.Body)
+		if err != nil {
+			c.JSON(400, map[string]string{"error": err.Error()})
+		}
+
+		input := map[string]any{}
+		err = json.Unmarshal(jsonData, &input)
+		if err != nil {
+			c.JSON(400, map[string]string{"error": err.Error()})
+		}
+
+		username := input["username"].(string)
+		msg := input["message"].(string)
+
+		output, err := HandleCommand(username, msg)
+		if err != nil {
+			c.JSON(400, map[string]string{"error": err.Error()})
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": output,
+		})
+	})
+	r.Run()
 }
