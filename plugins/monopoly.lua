@@ -52,12 +52,13 @@ function Beg(username, msg)
 end -- beg
 
 function Gamble(username, msg)
+    msgTable = stringSplit(msg, " ")
     -- get user balance
     balance = getUserBalance(username)
     -- gamble amount 
     amount = 0
     -- see if user entered amount
-    amountInput =  #msg >= 2 and msg[2] or "all"
+    amountInput =  #msgTable >= 1 and msgTable[1] or "all"
     if amountInput == "all" then
         amount = tonumber(balance)
     else

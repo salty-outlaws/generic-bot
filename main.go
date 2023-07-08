@@ -13,6 +13,7 @@ import (
 	"github.com/salty-outlaws/generic-bot/db"
 	"github.com/salty-outlaws/generic-bot/plugin"
 	"github.com/salty-outlaws/generic-bot/rest"
+	"github.com/salty-outlaws/generic-bot/util"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -69,7 +70,11 @@ func HandleCommand(username string, msg string) (string, error) {
 		plugParams := regCommands[command]
 		// ret, err := pm.Call(plugParams.Plugin + "." + plugParams.Function)
 		ret := ""
-		err := pm.CallUnmarshal(&ret, plugParams.Plugin+"."+plugParams.Function, username, strings.Split(msg, " "))
+		err := pm.CallUnmarshal(
+			&ret,
+			plugParams.Plugin+"."+plugParams.Function,
+			username,
+			strings.Replace(msg, command+" ", "", 1))
 		if err != nil {
 			log.Errorf("error while handling command %s: %v", command, err)
 			return "", err
@@ -93,6 +98,13 @@ func AddCommands(pm plugin.PluginManager) {
 		"dPut":    db.Put,
 		"dList":   db.List,
 		"dDelete": db.Delete,
+
+		"jsonToMap":         util.JsonToMap,
+		"jsonListToMapList": util.JsonListToMapList,
+
+		"stringSplit":        util.StringSplit,
+		"stringReplaceFirst": util.StringReplaceFirst,
+		"stringReplace":      util.StringReplace,
 
 		// log from a plugin
 		"log": func(msg any) { log.Infof("lua: %v", msg) },
