@@ -1,9 +1,5 @@
 function RegisterCommands(filename)
-    register(filename, "punchline", "GetRandomPunchline")
-end
-
-function register(filename,command,function_name)
-    RegisterCommand(filename, command, function_name)
+    RegisterCommand(filename, "pls", "punchline", "GetRandomPunchline")
 end
 
 function GetRandomPunchline()

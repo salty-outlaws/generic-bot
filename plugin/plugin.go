@@ -152,6 +152,14 @@ func (pm *PluginManager) CallUnmarshal(v interface{}, fn string, args ...interfa
 		if b, ok := lv.(lua.LBool); ok {
 			nv.SetBool(bool(b))
 		}
+	case *map[string]string:
+		if b, ok := lv.(*lua.LTable); ok {
+			b.ForEach(func(x lua.LValue, y lua.LValue) {
+				xValue := reflect.ValueOf(x)
+				yValue := reflect.ValueOf(y)
+				nv.SetMapIndex(xValue, yValue)
+			})
+		}
 	case *map[interface{}]interface{}:
 		if b, ok := lv.(*lua.LTable); ok {
 			b.ForEach(func(x lua.LValue, y lua.LValue) {

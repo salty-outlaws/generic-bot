@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -10,23 +11,16 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/salty-outlaws/generic-bot/db"
 	"github.com/salty-outlaws/generic-bot/plugin"
-	"github.com/salty-outlaws/generic-bot/rest"
 	"github.com/salty-outlaws/generic-bot/util"
 	log "github.com/sirupsen/logrus"
 )
 
 var (
-	regCommands = map[string]RegisteredCommandParams{}
+	regCommands = map[string]string{}
+	regPrefixes = map[string]string{}
 	pm          plugin.PluginManager
 )
-
-// RegisteredCommandParams - params for each command
-type RegisteredCommandParams struct {
-	Plugin   string
-	Function string
-}
 
 // getPluginFiles - gets list of plugin files
 func getPluginFiles() []string {
@@ -48,68 +42,97 @@ func getPluginFiles() []string {
 }
 
 // RegisterCommand - register a new command from lua plugin
-func RegisterCommand(plugin string, command string, function string) {
+func RegisterCommand(plugin, prefix, command, function string) {
 	log.Infof("registered command %s.%s fn(%s)", plugin, command, function)
-	regCommands[command] = RegisteredCommandParams{
-		Plugin:   plugin,
-		Function: function,
-	}
+	regCommands[command] = function
+	regPrefixes[prefix+"/"+command] = plugin
 }
 
-func HandleCommand(username string, msg string) (string, error) {
+func HandleCommand(username string, msg string) (map[string]any, error) {
 	msg = strings.TrimSpace(msg)
-	command := strings.Split(msg, " ")[0]
+	msgParts := strings.Split(msg, " ")
+	prefix := ""
+	command := ""
+	if len(msgParts) < 2 {
+		command = msgParts[0]
+	} else {
+		prefix = msgParts[0]
+		command = msgParts[1]
+	}
 
-	switch command {
-	case "":
-		log.Debug("Invalid Command")
-	case "reload":
+	if prefix == "admin" && command == "reload" {
 		loadPlugins(pm)
 		log.Debug("reloaded plugins")
-	default:
-		plugParams := regCommands[command]
-		// ret, err := pm.Call(plugParams.Plugin + "." + plugParams.Function)
+		return map[string]any{
+			"type":    "text",
+			"message": "Plugins reloaded",
+		}, nil
+	}
+
+	if pluginName, ok := regPrefixes[prefix+"/"+command]; ok {
+		function, funcOK := regCommands[command]
+		if !funcOK {
+			return nil, errors.New("function not registered")
+		}
 		ret := ""
 		err := pm.CallUnmarshal(
 			&ret,
-			plugParams.Plugin+"."+plugParams.Function,
+			pluginName+"."+function,
 			username,
-			strings.Replace(msg, command+" ", "", 1))
+			strings.Replace(msg, fmt.Sprintf("%s %s ", prefix, command), "", 1))
 		if err != nil {
-			log.Errorf("error while handling command %s: %v", command, err)
-			return "", err
+			log.Debugf("error while handling command %s: %v", command, err)
+			return nil, err
 		}
 		log.Debugf(">%s: %s", command, ret)
-		return ret, nil
+		output := map[string]any{}
+		json.Unmarshal([]byte(ret), &output)
+		return output, nil
+	} else {
+		log.Debug("Invalid Command")
+		return nil, errors.New("invalid command")
 	}
-	return "", nil
 }
 
 func AddCommands(pm plugin.PluginManager) {
 	pm.SetBulk(map[string]any{
 		// rest api calling
-		"rGet":    rest.Get,
-		"rPut":    rest.Put,
-		"rPost":   rest.Post,
-		"rDelete": rest.Delete,
+		"rGet":    util.RGet,
+		"rPut":    util.RPut,
+		"rPost":   util.RPost,
+		"rPatch":  util.RPatch,
+		"rDelete": util.RDelete,
 
 		// db commands
-		"dGet":    db.Get,
-		"dPut":    db.Put,
-		"dList":   db.List,
-		"dDelete": db.Delete,
+		"dGet":    util.DGet,
+		"dPut":    util.DPut,
+		"dList":   util.DList,
+		"dDelete": util.DDelete,
 
 		"jsonToMap":         util.JsonToMap,
 		"jsonListToMapList": util.JsonListToMapList,
 
+		// string utils
 		"stringSplit":        util.StringSplit,
+		"stringJoin":         util.StringJoin,
 		"stringReplaceFirst": util.StringReplaceFirst,
 		"stringReplace":      util.StringReplace,
+
+		"tagToId": util.DiscordTagToId,
+		"idToTag": util.DiscordIdToTag,
+
+		"random": util.RandomNumber,
+		"yesno":  util.YesNo,
 
 		// log from a plugin
 		"log": func(msg any) { log.Infof("lua: %v", msg) },
 
-		// allow registering commands from plugin
+		// output types
+		"embed": util.Embed,
+		"image": util.Image,
+		"text":  util.Text,
+
+		// allow registering commands and prefix from plugin
 		"RegisterCommand": RegisterCommand,
 	})
 }
@@ -141,7 +164,7 @@ func main() {
 
 	// Add golang functions as commands to be called from lua
 	AddCommands(pm)
-	HandleCommand("system", "reload")
+	HandleCommand("system", "admin reload")
 
 	webserver()
 }
@@ -166,12 +189,11 @@ func webserver() {
 
 		output, err := HandleCommand(username, msg)
 		if err != nil {
+			log.Error(err)
 			c.JSON(400, map[string]string{"error": err.Error()})
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"message": output,
-		})
+		c.JSON(http.StatusOK, output)
 	})
 	r.Run()
 }

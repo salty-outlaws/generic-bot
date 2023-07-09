@@ -1,4 +1,4 @@
-package rest
+package util
 
 import (
 	"github.com/go-resty/resty/v2"
@@ -7,7 +7,7 @@ import (
 
 var r = resty.New()
 
-func Get(url string) string {
+func RGet(url string) string {
 	v, err := r.R().Get(url)
 	if err != nil {
 		log.Errorf("rest get error: %v", err)
@@ -16,7 +16,7 @@ func Get(url string) string {
 	return v.String()
 }
 
-func Post(url string, body string) string {
+func RPost(url string, body string) string {
 	v, err := r.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(`{"username":"testuser", "password":"testpass"}`).
@@ -28,7 +28,7 @@ func Post(url string, body string) string {
 	return v.String()
 }
 
-func Put(url string, body string) string {
+func RPut(url string, body string) string {
 	v, err := r.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(`{"username":"testuser", "password":"testpass"}`).
@@ -40,7 +40,7 @@ func Put(url string, body string) string {
 	return v.String()
 }
 
-func Patch(url string, body string) string {
+func RPatch(url string, body string) string {
 	v, err := r.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(`{"username":"testuser", "password":"testpass"}`).
@@ -52,7 +52,7 @@ func Patch(url string, body string) string {
 	return v.String()
 }
 
-func Delete(url string) {
+func RDelete(url string) {
 	_, err := r.R().Delete(url)
 	if err != nil {
 		log.Errorf("rest delete error: %v", err)

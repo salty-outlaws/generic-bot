@@ -1,22 +1,24 @@
 function RegisterCommands(filename)
-    register(filename, "dog", "GetDogPicture")
-    register(filename, "cat", "GetCatPicture")
-    register(filename, "random_image", "GetRandomImage")
-end
-
-function register(filename,command,function_name)
-    RegisterCommand(filename, command, function_name)
+    RegisterCommand(filename, "pls", "dog", "GetDogPicture")
+    RegisterCommand(filename, "pls", "cat", "GetCatPicture")
+    RegisterCommand(filename, "pls", "random_image", "GetRandomImage")
+    RegisterCommand(filename, "pls", "fox", "GetRandomFox")
 end
 
 function GetCatPicture()
-    return "https://cataas.com"..jsonToMap(rGet("https://cataas.com/cat?json=true"))["url"]
+    return image(
+        "https://cataas.com"..jsonToMap(rGet("https://cataas.com/cat?json=true"))["url"])
 end
 
 function GetDogPicture()
-    return jsonToMap(rGet("https://dog.ceo/api/breeds/image/random"))["message"]
+    return image(jsonToMap(rGet("https://dog.ceo/api/breeds/image/random"))["message"])
+end
+
+function GetRandomFox()
+    return image(jsonToMap(rGet("https://randomfox.ca/floof"))["image"])
 end
 
 function GetRandomImage()
     -- return jsonListToMapList(rGet("https://picsum.photos/v2/list?limit=1"))[1]["download_url"]
-    return "https://picsum.photos/200"
+    return image("https://picsum.photos/200")
 end

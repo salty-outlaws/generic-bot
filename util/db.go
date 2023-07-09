@@ -1,4 +1,4 @@
-package db
+package util
 
 import (
 	log "github.com/sirupsen/logrus"
@@ -17,14 +17,14 @@ func New() *leveldb.DB {
 	return d
 }
 
-func Put(collection string, key string, value string) {
+func DPut(collection string, key string, value string) {
 	err := ldb.Put([]byte(collection+"/"+key), []byte(value), nil)
 	if err != nil {
 		log.Errorf("db put error: %v", err)
 	}
 }
 
-func Get(collection string, key string) string {
+func DGet(collection string, key string) string {
 	result, err := ldb.Get([]byte(collection+"/"+key), nil)
 	if err != nil {
 		log.Errorf("db get error: %v", err)
@@ -33,7 +33,7 @@ func Get(collection string, key string) string {
 	return string(result)
 }
 
-func List(collection string) map[string]string {
+func DList(collection string) map[string]string {
 	result := map[string]string{}
 
 	iter := ldb.NewIterator(util.BytesPrefix([]byte(collection+"/")), nil)
@@ -49,7 +49,7 @@ func List(collection string) map[string]string {
 	return result
 }
 
-func Delete(collection string, key string) {
+func DDelete(collection string, key string) {
 	err := ldb.Delete([]byte(collection+"/"+key), nil)
 	if err != nil {
 		log.Errorf("db delete error: %v", err)
