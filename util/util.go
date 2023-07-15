@@ -59,7 +59,7 @@ Generates random integer between from and to
 */
 func RandomNumber(from int, to int) int {
 	rand.Seed(time.Now().UnixNano())
-	return from + rand.Intn(to)
+	return from + rand.Intn(to-from)
 }
 
 func YesNo() bool {

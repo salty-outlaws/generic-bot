@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -17,9 +16,8 @@ import (
 )
 
 var (
-	regCommands = map[string]string{}
-	regPrefixes = map[string]string{}
-	pm          plugin.PluginManager
+	pluginDirectory = map[string]string{}
+	pm              plugin.PluginManager
 )
 
 // getPluginFiles - gets list of plugin files
@@ -43,55 +41,56 @@ func getPluginFiles() []string {
 
 // RegisterCommand - register a new command from lua plugin
 func RegisterCommand(plugin, prefix, command, function string) {
-	log.Infof("registered command %s.%s fn(%s)", plugin, command, function)
-	regCommands[command] = function
-	regPrefixes[prefix+"/"+command] = plugin
+	log.Infof("registered command %s/%s -> %s.%s", prefix, command, plugin, function)
+	pluginDirectory[getPluginKey(prefix, command)] = strings.Join([]string{plugin, function}, ".")
 }
 
-func HandleCommand(username string, msg string) (map[string]any, error) {
-	msg = strings.TrimSpace(msg)
-	msgParts := strings.Split(msg, " ")
+func getPluginKey(prefix, command string) string {
+	return strings.Join([]string{prefix, command}, "/")
+}
+
+func HandleCommand(guild, username, msg string) (map[string]any, error) {
+	msgs := strings.Split(strings.TrimSpace(msg), " ")
 	prefix := ""
 	command := ""
-	if len(msgParts) < 2 {
-		command = msgParts[0]
+	if len(msgs) == 1 {
+		command = msgs[0]
 	} else {
-		prefix = msgParts[0]
-		command = msgParts[1]
+		prefix = msgs[0]
+		command = msgs[1]
 	}
 
 	if prefix == "admin" && command == "reload" {
 		loadPlugins(pm)
-		log.Debug("reloaded plugins")
 		return map[string]any{
 			"type":    "text",
 			"message": "Plugins reloaded",
 		}, nil
 	}
 
-	if pluginName, ok := regPrefixes[prefix+"/"+command]; ok {
-		function, funcOK := regCommands[command]
-		if !funcOK {
-			return nil, errors.New("function not registered")
-		}
-		ret := ""
-		err := pm.CallUnmarshal(
-			&ret,
-			pluginName+"."+function,
-			username,
-			strings.Replace(msg, fmt.Sprintf("%s %s ", prefix, command), "", 1))
-		if err != nil {
-			log.Debugf("error while handling command %s: %v", command, err)
-			return nil, err
-		}
-		log.Debugf(">%s: %s", command, ret)
-		output := map[string]any{}
-		json.Unmarshal([]byte(ret), &output)
-		return output, nil
-	} else {
-		log.Debug("Invalid Command")
-		return nil, errors.New("invalid command")
+	pluginEntry, ok := pluginDirectory[getPluginKey(prefix, command)]
+	if !ok {
+		errLine := fmt.Sprintf("No plugin entry found for prefix %s command %s", prefix, command)
+		log.Debug(errLine)
+		return map[string]any{"type": "debug", "message": errLine}, nil
 	}
+
+	msg = strings.Replace(msg, prefix, "", 1)
+	msg = strings.Replace(msg, command, "", 1)
+	msg = strings.TrimSpace(msg)
+
+	ret := ""
+	err := pm.CallUnmarshal(
+		&ret, pluginEntry, username, msg)
+	if err != nil {
+		log.Errorf("error while handling command %s: %v", command, err)
+		return nil, err
+	}
+
+	log.Debugf(">%s: %s", getPluginKey(prefix, command), ret)
+	output := map[string]any{}
+	json.Unmarshal([]byte(ret), &output)
+	return output, nil
 }
 
 func AddCommands(pm plugin.PluginManager) {
@@ -103,11 +102,10 @@ func AddCommands(pm plugin.PluginManager) {
 		"rPatch":  util.RPatch,
 		"rDelete": util.RDelete,
 
-		// db commands
-		"dGet":    util.DGet,
-		"dPut":    util.DPut,
-		"dList":   util.DList,
-		"dDelete": util.DDelete,
+		"mUpsert": util.MUpsert,
+		"mGet":    util.MGet,
+		"mDelete": util.MDelete,
+		"mFind":   util.MFind,
 
 		"jsonToMap":         util.JsonToMap,
 		"jsonListToMapList": util.JsonListToMapList,
@@ -138,14 +136,11 @@ func AddCommands(pm plugin.PluginManager) {
 }
 
 func loadPlugins(pm plugin.PluginManager) {
-
 	// load all plugin files
 	for _, p := range getPluginFiles() {
 		_, err := pm.Load("./" + p)
 		if err != nil {
-			fmt.Println("could not load ", p, err.Error())
-		} else {
-			fmt.Println("loaded", p)
+			log.Errorf("could not load %s error %s", p, err.Error())
 		}
 	}
 
@@ -164,33 +159,41 @@ func main() {
 
 	// Add golang functions as commands to be called from lua
 	AddCommands(pm)
-	HandleCommand("system", "admin reload")
+	HandleCommand("", "system", "admin reload")
 
 	webserver()
 }
 
 func webserver() {
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	r.POST("/api/message", func(c *gin.Context) {
 
 		jsonData, err := ioutil.ReadAll(c.Request.Body)
 		if err != nil {
 			c.JSON(400, map[string]string{"error": err.Error()})
+			return
 		}
 
 		input := map[string]any{}
 		err = json.Unmarshal(jsonData, &input)
 		if err != nil {
 			c.JSON(400, map[string]string{"error": err.Error()})
+			return
 		}
 
+		guild := input["guild"].(string)
 		username := input["username"].(string)
 		msg := input["message"].(string)
 
-		output, err := HandleCommand(username, msg)
+		output, err := HandleCommand(guild, username, msg)
 		if err != nil {
 			log.Error(err)
-			c.JSON(400, map[string]string{"error": err.Error()})
+			c.JSON(400, map[string]string{
+				"type":  "error",
+				"error": err.Error(),
+			})
+			return
 		}
 
 		c.JSON(http.StatusOK, output)
