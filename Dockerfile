@@ -16,6 +16,7 @@ RUN apk update \
     && update-ca-certificates 2>/dev/null || true
 
 COPY --from=builder /app/bin/generic-bot /generic-bot
+COPY --from=builder /app/plugin_repos.json /plugin_repos.json
 
 CMD ["/generic-bot"]
 

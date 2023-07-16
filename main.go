@@ -61,7 +61,7 @@ func HandleCommand(guild, username, msg string) (map[string]any, error) {
 	}
 
 	if prefix == "admin" && command == "reload" {
-		loadPlugins(pm)
+		loadPlugins()
 		return map[string]any{
 			"type":    "text",
 			"message": "Plugins reloaded",
@@ -135,12 +135,35 @@ func AddCommands(pm plugin.PluginManager) {
 	})
 }
 
-func loadPlugins(pm plugin.PluginManager) {
+func loadPlugins() {
+
+	resetPm()
+
 	// load all plugin files
 	for _, p := range getPluginFiles() {
-		_, err := pm.Load("./" + p)
+		_, err := pm.LoadFile("./" + p)
 		if err != nil {
 			log.Errorf("could not load %s error %s", p, err.Error())
+		}
+	}
+
+	pluginReposFile, _ := ioutil.ReadFile("plugin_repos.json")
+	pluginRepos := []string{}
+	err := json.Unmarshal(pluginReposFile, &pluginRepos)
+	if err != nil {
+		log.Panicf("Could not load repos file")
+	}
+
+	for _, url := range pluginRepos {
+		repoPlugins, err := plugin.LoadPluginRepo(url)
+		if err != nil {
+			log.Errorf("Could not load plugins from %s", url)
+		}
+		for _, pluginName := range repoPlugins {
+			_, err := pm.LoadUrl(fmt.Sprintf("%s/%s?raw=true", url, pluginName))
+			if err != nil {
+				log.Errorf("could not load URL: %s", err.Error())
+			}
 		}
 	}
 
@@ -152,13 +175,14 @@ func loadPlugins(pm plugin.PluginManager) {
 
 }
 
+func resetPm() {
+	pm = plugin.NewPluginManager()
+	AddCommands(pm)
+}
+
 func main() {
 	log.SetLevel(log.DebugLevel)
-	pm = plugin.NewPluginManager()
-	defer pm.Close()
-
 	// Add golang functions as commands to be called from lua
-	AddCommands(pm)
 	HandleCommand("", "system", "admin reload")
 
 	webserver()

@@ -11,6 +11,7 @@ import (
 	"sort"
 
 	"github.com/pkg/errors"
+	"github.com/salty-outlaws/generic-bot/util"
 	lua "github.com/yuin/gopher-lua"
 	luar "layeh.com/gopher-luar"
 )
@@ -84,7 +85,7 @@ func (pm *PluginManager) Unload(path string) error {
 }
 
 // Load plugin functions in lua VM
-func (pm *PluginManager) Load(path string) (Plugin, error) {
+func (pm *PluginManager) LoadFile(path string) (Plugin, error) {
 	var newPlugin Plugin
 	filePath, _ := filepath.Abs(path)
 	_, fileName := filepath.Split(filePath)
@@ -100,6 +101,25 @@ func (pm *PluginManager) Load(path string) (Plugin, error) {
 	}
 	newPlugin = Plugin{filePath, pluginName}
 	pm.plugins[filePath] = newPlugin
+	return newPlugin, nil
+}
+
+// Load plugin functions from a URL in lua VM
+func (pm *PluginManager) LoadUrl(url string) (Plugin, error) {
+
+	var newPlugin Plugin
+
+	data := util.RGet(url)
+
+	// Currently fetching plugin name from the url. Might change later
+	fileExt := filepath.Ext(url)
+	pluginName := strings.TrimSuffix(filepath.Base(url), fileExt)
+	pluginDef := "\nlocal P = {}\n" + pluginName + " = P\nsetmetatable(" + pluginName + ", {__index = _G})\nsetfenv(1, P)\n"
+	if err := pm.L.DoString(pluginDef + string(data)); err != nil {
+		return newPlugin, errors.Wrap(err, "Load: Unable to execute lua string")
+	}
+	newPlugin = Plugin{url, pluginName}
+	pm.plugins[url] = newPlugin
 	return newPlugin, nil
 }
 
